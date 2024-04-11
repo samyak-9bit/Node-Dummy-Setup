@@ -3,40 +3,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors'); 
 const multer = require('multer');
-const fs = require("fs");
-const path = require("path");
 const bodyParser = require('body-parser');
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        if (!fs.existsSync("public")) {
-            fs.mkdirSync("public");
-          }
-      
-          if (!fs.existsSync("public/videos")) {
-            fs.mkdirSync("public/videos");
-          }
-      
-          cb(null, "public/videos");
-    },
-    filename: function (req, file, cb) {
-      cb(null, Date.now() + '-' + file.originalname); // Set unique filename for each uploaded video
-    }
-  });
-  
-  // Create multer instance with defined storage
-  const upload = multer({
-    storage: storage,
-    fileFilter: function (req, file, cb) {
-      var ext = path.extname(file.originalname);
-  
-      if (ext !== ".mkv" && ext !== ".mp4") {
-        return cb(new Error("Only videos are allowed!"));
-      }
-  
-      cb(null, true);
-    },
-  });  
 
 const app = express();
 const server = http.createServer(app);
@@ -51,8 +19,18 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 // Middleware to parse JSON bodies
 app.use(express.json());
-app.use(multer().single('video'));
 app.use(bodyParser.json());
+
+const storage = multer.diskStorage({
+  destination(req, file, callback) {
+    callback(null, './videos');
+  },
+  filename(req, file, callback) {
+    callback(null, `${file.fieldname}_${Date.now()}_${file.originalname}`);
+  },
+});
+
+const upload = multer({ storage });
 
 // Store registered users in memory (mock database)
 let users = [
@@ -128,6 +106,18 @@ let users = [
     }
 ];
 
+
+app.use(bodyParser.raw({ type: 'application/octet-stream' }));
+
+
+// New endpoint to handle audio buffer
+app.post('/audio', (req, res) => {
+    const buffer = req.body;
+    // Process the received buffer here
+    console.log('Received audio buffer:', buffer);
+    res.send('Audio buffer received successfully');
+});
+
 // Route for handling user registration
 app.post('/register', (req, res) => {
     const { name, email, password, isSuperUser } = req.body;
@@ -147,6 +137,15 @@ app.post('/register', (req, res) => {
 
     res.status(201).json({ message: 'User registered successfully', user: newUser });
     console.log(users);
+});
+
+//Route for uploading Video
+app.post('/api/upload', upload.array('video', 3), (req, res) => {
+  console.log('file', req.files);
+  console.log('body', req.body);
+  res.status(200).json({
+    message: 'success!',
+  });
 });
 
 // Route for handling DELETE requests to delete a user
@@ -204,14 +203,6 @@ app.post('/login', (req, res) => {
     }
 });
   
-  // Route for handling video uploads
-app.post('/uploadVideo', upload.single('video'), (req, res) => {
-    // Uploaded video file is available in req.file
-    const videoPath = req.file.path;
-    console.log('Video uploaded successfully:', videoPath);
-    res.status(200).json({ message: 'Video uploaded successfully', videoPath: videoPath });
-  });
-
 
 app.get('/users', (req, res) => {
     // Return the list of users
@@ -219,52 +210,9 @@ app.get('/users', (req, res) => {
 });
 
 
-// Assuming 'audio' folder exists
-const audioFolderPath = path.join(__dirname, 'audio');
-
-
 // Socket.io connection event
 io.on('connection', (socket) => {
     console.log('A user connected', socket.id);
-
-    socket.on('startRecording', () => {
-      console.log('Started Recording.')
-        // Create a unique filename based on timestamp
-        const fileName = `recording_${Date.now()}.wav`;
-        const filePath = path.join(audioFolderPath, fileName);
-    
-        // Create a write stream
-        const writeStream = fs.createWriteStream(filePath);
-    
-        // Event listener for error handling
-        writeStream.on('error', (err) => {
-            console.error('Error occurred while writing audio file:', err);
-        });
-    
-        // Event listener for stream finish
-        writeStream.on('finish', () => {
-            console.log('Audio recording saved:', fileName);
-            // Optionally, you can emit an event or perform any other action here
-        });
-    
-        // Event listener for new data
-        socket.on('newData', (data) => {
-          if (data && data.data) {
-            // Write data to the stream
-            writeStream.write(data.data);
-            console.log(data);
-        } else {
-            console.error('Invalid data received:', data);
-        }
-        });
-    
-        // Event listener for stop recording
-        socket.on('stopRecording', () => {
-            // Stop the stream
-            writeStream.end();
-            console.log('Stopped recording');
-        });
-    });
 
     // Event listener for disconnect
     socket.on('disconnect', () => {
