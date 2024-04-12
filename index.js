@@ -30,7 +30,17 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const storageforAudio = multer.diskStorage({
+    destination(req, file, callback) {
+      callback(null, './audio');
+    },
+    filename(req, file, callback) {
+      callback(null, `${file.fieldname}_${Date.now()}_${file.originalname}`);
+    },
+  });
+
+const uploadVideo = multer({ storage });
+const uploadAudio = multer({ storageforAudio });
 
 // Store registered users in memory (mock database)
 let users = [
@@ -140,13 +150,22 @@ app.post('/register', (req, res) => {
 });
 
 //Route for uploading Video
-app.post('/api/upload', upload.array('video', 3), (req, res) => {
+app.post('/api/upload', uploadVideo.array('video', 3), (req, res) => {
   console.log('file', req.files);
   console.log('body', req.body);
   res.status(200).json({
     message: 'success!',
   });
 });
+
+//Route for uploading Recorded Audio
+app.post('/api/recordedAudio', uploadAudio.array('audio', 3), (req, res) => {
+    console.log('file', req.files);
+    console.log('body', req.body);
+    res.status(200).json({
+      message: 'success!',
+    });
+  });
 
 // Route for handling DELETE requests to delete a user
 app.delete('/users/:id', (req, res) => {
